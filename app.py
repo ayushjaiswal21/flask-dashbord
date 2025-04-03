@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
-from models import db, User, Quiz, Classroom, Student, Question
+from models import db, User, Quiz, Classroom, Question
 import os
 import time
 import json
@@ -284,20 +284,18 @@ def login():
     if request.method == 'POST':
         email = request.form['email']
         password = request.form['password']
+        role = request.form.get('role', 'student')
         
-        user = User.query.filter_by(email=email).first()
+        user = User.query.filter_by(email=email, user_type=role).first()
         
-        if user and user.password == password:  # In production use proper password hashing
+        if user and user.check_password(password):
             session['user_id'] = user.id
             session['user_type'] = user.user_type
             session['name'] = user.name
-            
-            if user.user_type == 'teacher':
-                return redirect(url_for('teacher_dashboard'))
-            else:
-                return redirect(url_for('student_dashboard'))
+            flash('Login successful!', 'success')
+            return redirect(url_for('teacher_dashboard' if user.user_type == 'teacher' else 'student_dashboard'))
         else:
-            flash('Invalid email or password')
+            flash('Invalid email/password or account type', 'error')
     
     return render_template('login.html')
 
@@ -323,37 +321,38 @@ def student_dashboard():
         return redirect(url_for('login'))
     
     student_id = session['user_id']
-    student = Student.query.get(student_id)
+    student = User.query.get(student_id)  # Changed from Student.query to User.query
+    
     available_quizzes = []
     completed_quizzes = []
     avg_score = 0
     
-    # Logic to get student quizzes
     # Get classrooms the student belongs to
-    student_classrooms = student.classrooms if hasattr(student, 'classrooms') else []
-    
-    # Get quizzes assigned to those classrooms
-    for classroom in student_classrooms:
+    for classroom in student.enrolled_classrooms:
         for quiz in classroom.quizzes:
-            # Check if student has already completed this quiz
-            # This assumes you have a model to track quiz attempts
-            completed = False  # Replace with actual logic
+            # Check if student has completed this quiz
+            result = QuizResult.query.filter_by(
+                user_id=student.id,
+                quiz_id=quiz.id
+            ).first()
             
-            if completed:
-                completed_quizzes.append(quiz)
+            if result:
+                completed_quizzes.append({
+                    'quiz': quiz,
+                    'result': result
+                })
             else:
                 available_quizzes.append(quiz)
     
     # Calculate average score if there are completed quizzes
     if completed_quizzes:
-        # This logic depends on how you store quiz scores
-        # This is just a placeholder
-        avg_score = 0  # Replace with actual calculation
+        total = sum(result['result'].score for result in completed_quizzes)
+        avg_score = round(total / len(completed_quizzes), 2)
     
-    return render_template('student_dashboard.html', 
-                           available_quizzes=available_quizzes,
-                           completed_quizzes=completed_quizzes,
-                           avg_score=avg_score)
+    return render_template('student_dashboard.html',
+                         available_quizzes=available_quizzes,
+                         completed_quizzes=completed_quizzes,
+                         avg_score=avg_score)
 
 @app.route('/quizzes')
 def quizzes():
@@ -552,6 +551,53 @@ def generate_quiz_api():
     except Exception as e:
         logger.error(f"Server error: {str(e)}", exc_info=True)
         return jsonify({"error": "Internal server error"}), 500
+
+# Add these routes before the if __name__ == '__main__' block
+
+@app.route('/signup', methods=['GET', 'POST'])
+def signup():
+    if request.method == 'POST':
+        try:
+            name = request.form['name']
+            email = request.form['email']
+            password = request.form['password']
+            role = request.form.get('role', 'student')
+            
+            if not all([name, email, password]):
+                flash('All fields are required')
+                return redirect(url_for('signup'))
+
+            if User.query.filter_by(email=email).first():
+                flash('Email already exists')
+                return redirect(url_for('signup'))
+                
+            new_user = User(
+                name=name,
+                email=email,
+                user_type=role
+            )
+            new_user.set_password(password)
+            
+            db.session.add(new_user)
+            db.session.commit()
+            
+            flash('Account created successfully! Please login')
+            return redirect(url_for('login'))
+        
+        except Exception as e:
+            db.session.rollback()
+            flash('Error creating account')
+            logger.error(f"Signup error: {str(e)}")
+    
+    return render_template('signup.html')
+
+@app.route('/teacher-login')
+def teacher_login():
+    return render_template('login.html', role='teacher')
+
+@app.route('/student-login')
+def student_login():
+    return render_template('login.html', role='student')
 
 if __name__ == "__main__":
     required_vars = ['DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME']

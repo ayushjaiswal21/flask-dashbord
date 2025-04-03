@@ -16,11 +16,25 @@
                     <span class="welcome-message">Welcome, {{ session.get('name') }}</span>
                     <a href="{{ url_for('logout') }}" class="btn btn-secondary">Logout</a>
                 {% else %}
+                    <a href="{{ url_for('signup') }}" class="btn btn-secondary">Sign Up</a>
                     <a href="{{ url_for('login') }}" class="btn btn-primary">Login</a>
                 {% endif %}
             </div>
         </div>
     </header>
+
+    <div class="header-right">
+        {% if session.get('user_id') %}
+            <span class="welcome-message">Welcome, {{ session.get('name') }}</span>
+            <a href="{{ url_for('logout') }}" class="btn btn-secondary">Logout</a>
+        {% else %}
+            <a href="{{ url_for('signup') }}" class="btn btn-secondary">Sign Up</a>
+            <div class="login-options">
+                <a href="{{ url_for('login', role='teacher') }}" class="btn btn-primary">Teacher Login</a>
+                <a href="{{ url_for('login', role='student') }}" class="btn btn-primary">Student Login</a>
+            </div>
+        {% endif %}
+    </div>
 
     <main>
         {% with messages = get_flashed_messages() %}

@@ -4,13 +4,18 @@
     <title>ClassQuiz Application</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
 <body>
-    <h1>Welcome to ClassQuiz</h1>
-    <p>An AI-powered quiz generation tool for educators</p>
-    
-    <div class="buttons">
-        <a href="{{ url_for('login') }}">Login</a>
+    <div class="auth-container">
+        <div class="auth-card">
+            <h1>Welcome to ClassQuiz</h1>
+            <p>An AI-powered quiz generation tool for educators</p>
+            <div class="auth-actions">
+                <a href="{{ url_for('signup') }}" class="btn btn-highlight">Get Started</a>
+                <a href="{{ url_for('login') }}" class="btn btn-secondary">Login</a>
+            </div>
+        </div>
     </div>
 </body>
 </html>

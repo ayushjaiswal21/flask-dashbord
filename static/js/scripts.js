@@ -1,106 +1,106 @@
+// DOM Elements
+const errorContainer = document.getElementById('errorContainer');
+const quizContainer = document.getElementById('quizContainer');
+
+// Generate Quiz Function
 async function generateQuiz() {
-    // Get user inputs
-    const topics = document.getElementById('topics').value.split(',').map(t => t.trim()).filter(t => t !== '');
-    const qType = document.getElementById('q_type').value;
-    const difficulty = document.getElementById('difficulty').value;
-    const numQuestions = document.getElementById('num_questions').value;
+    // Get form elements
+    const form = document.getElementById('quizForm');
+    if (!form) return;
+    
+    // Get form data
+    const formData = new FormData(form);
+    const topics = formData.get('topics').split(',').map(t => t.trim()).filter(t => t);
+    const qType = formData.get('q_type');
+    const difficulty = formData.get('difficulty');
+    const numQuestions = parseInt(formData.get('num_questions'));
 
     // Validate inputs
-    if (topics.length === 0 || !qType || !difficulty || !numQuestions) {
+    if (!topics.length || !qType || !difficulty || isNaN(numQuestions)) {
         displayError("All fields are required!");
         return;
     }
     
-    const num = Number(numQuestions);
-    if (isNaN(num) || num < 1 || num > 20) {
+    if (numQuestions < 1 || numQuestions > 20) {
         displayError("Please choose between 1 and 20 questions!");
         return;
     }
 
     try {
-        // Show loading message while fetching quiz
-        const container = document.getElementById('quizContainer');
-        container.innerHTML = "<p>Loading quiz...</p>";
-
-        // Clear previous errors
+        // Show loading state
+        quizContainer.innerHTML = "<div class='loading'>Generating quiz questions...</div>";
         clearError();
 
-        // Send POST request to the backend API
-        // Changed endpoint to match app.py's route
+        // Prepare request data
+        const requestData = {
+            topics: topics,
+            type: qType,
+            difficulty: difficulty,
+            num_questions: numQuestions
+        };
+
+        // Send request
         const response = await fetch("/api/generate-quiz-api", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-                topics: topics,
-                type: qType,
-                difficulty: difficulty,
-                num_questions: num,
-            }),
+            body: JSON.stringify(requestData),
         });
 
-        // Parse response data
-        const data = await response.json();
-
-        // Check for errors first
+        // Handle response
         if (!response.ok) {
-            throw new Error(data.error || `Request failed with status ${response.status}`);
+            const errorData = await response.json();
+            throw new Error(errorData.error || `Request failed with status ${response.status}`);
         }
 
-        if (response.status === 207) {
-            // Questions generated but not saved to database
-            console.warn("Database warning:", data.warning);
-            displayQuiz(data.questions, qType);
-            return;
+        const data = await response.json();
+        
+        if (!data.questions || !data.questions.length) {
+            throw new Error("No questions were generated");
         }
 
-        if (!data.questions || data.questions.length === 0) {
-            throw new Error("No questions generated");
-        }
-
-        // Display the generated quiz
+        // Display the quiz
         displayQuiz(data.questions, qType);
 
     } catch (error) {
-        // Handle errors gracefully
-        displayError(`Failed to generate quiz: ${error.message}`);
         console.error("Quiz generation error:", error);
+        displayError(`Failed to generate quiz: ${error.message}`);
+        quizContainer.innerHTML = "";
     }
 }
 
+// Display Generated Quiz
 function displayQuiz(questions, questionType) {
-    const container = document.getElementById('quizContainer');
-    
-    if (questions.length === 0) {
-        container.innerHTML = "<p>No questions to display</p>";
+    if (!questions.length) {
+        quizContainer.innerHTML = "<p>No questions were generated</p>";
         return;
     }
 
     let quizHTML = '';
     
     questions.forEach((q, i) => {
-        const questionText = q.question ? escapeHTML(q.question) : "Invalid question format";
-        const answerText = q.answer ? escapeHTML(q.answer) : "No answer provided";
+        const questionText = escapeHTML(q.question || "No question text");
+        const answerText = escapeHTML(q.answer || "No answer provided");
         
         let optionsHTML = '';
         let isMultipleChoice = false;
         let questionContent = questionText;
         
-        // Check for multiple choice pattern (A), B), etc.)
+        // Parse multiple choice options
         const optionRegex = /([A-Da-d]\))\s*(.+?)(?=\s+[A-Da-d]\)|$)/g;
-        let match;
         const options = [];
+        let match;
         
         while ((match = optionRegex.exec(questionText)) !== null) {
             options.push({
                 letter: match[1].charAt(0).toUpperCase(),
                 text: match[2].trim()
             });
-            // Remove the option from the main question text
             questionContent = questionContent.replace(match[0], '');
         }
         
+        // Build options HTML if multiple choice
         if (options.length > 0) {
             isMultipleChoice = true;
             options.forEach(opt => {
@@ -113,16 +113,15 @@ function displayQuiz(questions, questionType) {
             });
         }
         
+        // Build question HTML
         quizHTML += `
             <div class="question" data-answer="${answerText.trim().toUpperCase()}" data-index="${i}">
                 <h3>Question ${i + 1}:</h3>
                 <div class="question-text">${questionContent}</div>
                 
                 ${isMultipleChoice ? `
-                    <div class="options">
-                        ${optionsHTML}
-                    </div>
-                    <button class="confirm-btn" onclick="checkAnswer(${i})">Check Answer</button>
+                    <div class="options">${optionsHTML}</div>
+                    <button class="btn btn-primary confirm-btn" onclick="checkAnswer(${i})">Check Answer</button>
                     <div id="result_${i}" class="result hidden"></div>
                 ` : `
                     <details class="answer-details">
@@ -134,51 +133,123 @@ function displayQuiz(questions, questionType) {
         `;
     });
     
-    container.innerHTML = quizHTML;
+    quizContainer.innerHTML = quizHTML;
+    
+    // Add save button if not present
+    if (!document.getElementById('saveQuizBtn')) {
+        const saveBtn = document.createElement('button');
+        saveBtn.id = 'saveQuizBtn';
+        saveBtn.className = 'btn btn-primary';
+        saveBtn.textContent = 'Save Quiz';
+        saveBtn.onclick = saveQuiz;
+        quizContainer.insertAdjacentElement('afterend', saveBtn);
+    }
 }
 
+// Check Answer Function
 function checkAnswer(questionIndex) {
-    const questionDiv = document.querySelector(`.question[data-index="${questionIndex}"]`);
-    const selectedOption = document.querySelector(`input[name="question_${questionIndex}"]:checked`);
-    const correctAnswer = questionDiv.getAttribute('data-answer');
-    const resultDiv = document.getElementById(`result_${questionIndex}`);
+    const questionEl = document.querySelector(`.question[data-index="${questionIndex}"]`);
+    const selectedOption = questionEl.querySelector(`input[name="question_${questionIndex}"]:checked`);
+    const correctAnswer = questionEl.dataset.answer;
+    const resultEl = document.getElementById(`result_${questionIndex}`);
     
     if (!selectedOption) {
-        resultDiv.textContent = "Please select an answer first!";
-        resultDiv.className = "result error";
-        resultDiv.classList.remove("hidden");
+        resultEl.textContent = "Please select an answer first!";
+        resultEl.className = "result error";
+        resultEl.classList.remove("hidden");
         return;
     }
     
     const selectedValue = selectedOption.value.toUpperCase();
-    resultDiv.classList.remove("hidden");
+    const isCorrect = selectedValue === correctAnswer;
     
-    // Compare answers (flexible comparison)
-    const normalizedSelected = selectedValue.replace(/[).]/g, '').trim();
-    const normalizedCorrect = correctAnswer.replace(/[).]/g, '').trim();
+    resultEl.textContent = isCorrect 
+        ? "✓ Correct!" 
+        : `✗ Incorrect! The correct answer is ${correctAnswer}`;
     
-    if (normalizedSelected === normalizedCorrect) {
-        resultDiv.textContent = "✓ Correct!";
-        resultDiv.className = "result correct";
-    } else {
-        resultDiv.textContent = `✗ Incorrect! The correct answer is ${correctAnswer}`;
-        resultDiv.className = "result incorrect";
-    }
+    resultEl.className = isCorrect ? "result correct" : "result incorrect";
+    resultEl.classList.remove("hidden");
     
-    // Disable all radios after answering
-    const radios = questionDiv.querySelectorAll('input[type="radio"]');
-    radios.forEach(radio => {
+    // Disable interaction after answering
+    questionEl.querySelectorAll('input[type="radio"]').forEach(radio => {
         radio.disabled = true;
     });
     
-    // Disable confirm button
-    const confirmBtn = questionDiv.querySelector('.confirm-btn');
-    if (confirmBtn) {
-        confirmBtn.disabled = true;
+    const confirmBtn = questionEl.querySelector('.confirm-btn');
+    if (confirmBtn) confirmBtn.disabled = true;
+}
+
+// Save Quiz Function
+async function saveQuiz() {
+    const title = document.getElementById('title')?.value;
+    const description = document.getElementById('description')?.value;
+    
+    if (!title) {
+        displayError("Quiz title is required");
+        return;
+    }
+    
+    const questions = [];
+    document.querySelectorAll('.question').forEach((qEl, i) => {
+        const question = {
+            text: qEl.querySelector('.question-text').textContent,
+            options: [],
+            correct_answer: qEl.dataset.answer
+        };
+        
+        // Get options if multiple choice
+        qEl.querySelectorAll('.option label').forEach(opt => {
+            question.options.push(opt.textContent.trim());
+        });
+        
+        questions.push(question);
+    });
+    
+    try {
+        const formData = new FormData();
+        formData.append('title', title);
+        if (description) formData.append('description', description);
+        
+        questions.forEach((q, i) => {
+            formData.append(`question_${i+1}`, q.text);
+            q.options.forEach((opt, j) => {
+                formData.append(`option_${i+1}_${j+1}`, opt);
+            });
+            formData.append(`correct_${i+1}`, q.correct_answer);
+        });
+        
+        const response = await fetch('/create-quiz', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to save quiz');
+        }
+        
+        window.location.href = '/quizzes';
+        
+    } catch (error) {
+        console.error("Save quiz error:", error);
+        displayError(error.message);
     }
 }
 
-// Helper function to escape HTML
+// Helper Functions
+function displayError(message) {
+    if (!errorContainer) return;
+    errorContainer.textContent = message;
+    errorContainer.classList.remove("hidden");
+    setTimeout(() => errorContainer.classList.add("hidden"), 5000);
+}
+
+function clearError() {
+    if (errorContainer) {
+        errorContainer.textContent = "";
+        errorContainer.classList.add("hidden");
+    }
+}
+
 function escapeHTML(str) {
     if (!str) return "";
     const div = document.createElement('div');
@@ -186,88 +257,34 @@ function escapeHTML(str) {
     return div.innerHTML;
 }
 
-function displayError(message) {
-    const errorContainer = document.getElementById('errorContainer');
-    errorContainer.textContent = message;
-    errorContainer.classList.remove("hidden");
-}
-
-function clearError() {
-    const errorContainer = document.getElementById('errorContainer');
-    errorContainer.textContent = "";
-    errorContainer.classList.add("hidden");
-}
-
-// Save quiz function to work with app.py
-function saveQuiz() {
-    const quizTitle = document.getElementById('quizTitle').value;
-    const quizDescription = document.getElementById('quizDescription').value;
-    
-    // Get questions from displayed quiz
-    const questions = [];
-    const questionDivs = document.querySelectorAll('.question');
-    
-    questionDivs.forEach((div, index) => {
-        const questionText = div.querySelector('.question-text').textContent;
-        const options = [];
-        
-        // Get options if multiple choice
-        const optionElements = div.querySelectorAll('.option label');
-        optionElements.forEach(opt => {
-            options.push(opt.textContent.trim());
-        });
-        
-        const correctAnswer = div.getAttribute('data-answer');
-        
-        questions.push({
-            question_text: questionText,
-            options: options,
-            correct_answer: correctAnswer
-        });
-    });
-    
-    // Send to server
-    fetch('/create-quiz', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            title: quizTitle,
-            description: quizDescription,
-            questions: questions
-        })
-    })
-    .then(response => {
-        if (response.ok) {
-            window.location.href = '/quizzes';
-        } else {
-            throw new Error('Failed to save quiz');
-        }
-    })
-    .catch(error => {
-        displayError(`Error: ${error.message}`);
-    });
-}
-
+// Event Listeners
 document.addEventListener('DOMContentLoaded', () => {
+    // Generate quiz button
     const generateBtn = document.getElementById('generateBtn');
     if (generateBtn) {
         generateBtn.addEventListener('click', generateQuiz);
     }
-
-    // Add save quiz button event listener
-    const saveQuizBtn = document.getElementById('saveQuizBtn');
-    if (saveQuizBtn) {
-        saveQuizBtn.addEventListener('click', saveQuiz);
-    }
-
-    // Optional: Add form submission handler
-    const quizForm = document.querySelector('form');
+    
+    // Form submission
+    const quizForm = document.getElementById('quizForm');
     if (quizForm) {
         quizForm.addEventListener('submit', (e) => {
             e.preventDefault();
             generateQuiz();
+        });
+    }
+    
+    // Tab switching
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    if (tabBtns.length) {
+        tabBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const tab = this.dataset.tab;
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                this.classList.add('active');
+                document.getElementById(`${tab}-tab`).classList.add('active');
+            });
         });
     }
 });

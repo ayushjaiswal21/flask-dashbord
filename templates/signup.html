@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+
+{% block title %}ClassQuiz - Sign Up{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-card">
+        <h2 class="auth-title">Create ClassQuiz Account</h2>
+        <p class="auth-subtitle">Select your role to get started</p>
+        
+        <form method="POST" action="{{ url_for('signup') }}">
+            <div class="role-selector">
+                <button type="button" class="role-btn active" data-role="teacher">I'm a Teacher</button>
+                <button type="button" class="role-btn" data-role="student">I'm a Student</button>
+                <input type="hidden" name="role" id="selectedRole" value="teacher" required>
+            </div>
+
+            <div class="form-group">
+                <label for="name">Full Name</label>
+                <input type="text" id="name" name="name" placeholder="John Doe" required>
+            </div>
+
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email" placeholder="email@example.com" required>
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" placeholder="••••••" required>
+            </div>
+
+            <button type="submit" class="btn btn-highlight btn-block">Create Account</button>
+        </form>
+
+        <p class="auth-footer">Already have an account? <a href="{{ url_for('login') }}">Log in</a></p>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const roleBtns = document.querySelectorAll('.role-btn');
+        const roleInput = document.getElementById('selectedRole');
+        
+        roleBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                roleBtns.forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                roleInput.value = this.dataset.role;
+            });
+        });
+    });
+</script>
+{% endblock %}
