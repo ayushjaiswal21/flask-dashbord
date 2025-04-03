@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+
+{% block title %}ClassQuiz - Teacher Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <h1 class="dashboard-title">Teacher Dashboard</h1>
+    <p class="dashboard-subtitle">Manage your classes and quizzes</p>
+    
+    <nav class="dashboard-nav">
+        <ul>
+            <li class="active"><a href="{{ url_for('teacher_dashboard') }}">Overview</a></li>
+            <li><a href="{{ url_for('quizzes') }}">Quizzes</a></li>
+            <li><a href="{{ url_for('classrooms') }}">Classrooms</a></li>
+            <li><a href="#">Reports</a></li>
+            <li><a href="#">Generate Quiz</a></li>
+        </ul>
+    </nav>
+    
+    <div class="dashboard-content">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Your Quizzes</h2>
+                        <p>You have created {{ quizzes|length }} quizzes</p>
+                    </div>
+                    <div class="card-body">
+                        {% for quiz in quizzes[:2] %}
+                        <div class="quiz-item">
+                            <h3>{{ quiz.title }}</h3>
+                            <p>Created on {{ quiz.created_date.strftime('%Y-%m-%d') }}</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Your Classrooms</h2>
+                        <p>You manage {{ classrooms|length }} classrooms</p>
+                    </div>
+                    <div class="card-body">
+                        {% for classroom in classrooms[:2] %}
+                        <div class="classroom-item">
+                            <h3>{{ classroom.name }}</h3>
+                            <p>{{ classroom.students|length }} students</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mt-4">
+            <h2>Quick Actions</h2>
+            <div class="quick-actions">
+                <a href="{{ url_for('create_quiz') }}" class="action-card">
+                    <h3>Create Quiz</h3>
+                    <p>Add a new assessment</p>
+                </a>
+                
+                <a href="{{ url_for('ai_generate_quiz') }}" class="action-card action-card-highlight">
+                    <h3>AI Generate Quiz</h3>
+                    <p>Use AI to create quiz</p>
+                </a>
+                
+                <a href="#" class="action-card">
+                    <h3>Assign Quiz</h3>
+                    <p>To a classroom</p>
+                </a>
+                
+                <a href="#" class="action-card">
+                    <h3>Generate Report</h3>
+                    <p>View performance</p>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

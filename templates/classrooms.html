@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+
+{% block title %}ClassQuiz - Classrooms{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <h1 class="dashboard-title">Your Classrooms</h1>
+    
+    <nav class="dashboard-nav">
+        <ul>
+            <li><a href="{{ url_for('teacher_dashboard') }}">Overview</a></li>
+            <li><a href="{{ url_for('quizzes') }}">Quizzes</a></li>
+            <li class="active"><a href="{{ url_for('classrooms') }}">Classrooms</a></li>
+            <li><a href="#">Reports</a></li>
+            <li><a href="#">Generate Quiz</a></li>
+        </ul>
+    </nav>
+    
+    <div class="dashboard-content">
+        {% for classroom in classrooms %}
+        <div class="classroom-card">
+            <h2>{{ classroom.name }}</h2>
+            <p>{{ classroom.students|length }} Students • {{ classroom.assigned_quizzes|length }} Quizzes</p>
+            
+            <div class="classroom-details">
+                <div class="student-list">
+                    <h3>Students:</h3>
+                    <ul>
+                        {% for student in classroom.students %}
+                        <li>{{ student.name }}</li>
+                        {% else %}
+                        <li>No students yet.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                
+                <div class="quiz-list">
+                    <h3>Assigned Quizzes:</h3>
+                    <ul>
+                        {% for cq in classroom.assigned_quizzes %}
+                        <li>{{ cq.quiz.title }}</li>
+                        {% else %}
+                        <li>No quizzes assigned yet.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="classroom-actions">
+                <button class="btn btn-secondary">Manage Students</button>
+                <button class="btn btn-primary">Assign Quiz</button>
+            </div>
+        </div>
+        {% else %}
+        <p class="no-classrooms">You haven't created any classrooms yet.</p>
+        <a href="#" class="btn btn-primary">Create Classroom</a>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

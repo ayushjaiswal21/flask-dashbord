@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+
+{% block title %}ClassQuiz - Create Quiz{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <h1 class="dashboard-title">
+        {% if ai_generate %}
+        AI Generate Quiz
+        {% else %}
+        Create New Quiz
+        {% endif %}
+    </h1>
+    
+    <div class="form-container">
+        <form method="POST" action="{{ url_for('ai_generate_quiz') if ai_generate else url_for('create_quiz') }}">
+            {% if ai_generate %}
+            <div class="form-group">
+                <label for="subject">Subject</label>
+                <select id="subject" name="subject" required>
+                    <option value="math">Mathematics</option>
+                    <option value="science">Science</option>
+                    <option value="literature">Literature</option>
+                    <option value="history">History</option>
+                    <option value="geography">Geography</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="num_questions">Number of Questions</label>
+                <input type="number" id="num_questions" name="num_questions" min="1" max="20" value="5" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="difficulty">Difficulty</label>
+                <select id="difficulty" name="difficulty" required>
+                    <option value="easy">Easy</option>
+                    <option value="medium" selected>Medium</option>
+                    <option value="hard">Hard</option>
+                </select>
+            </div>
+            
+            <button type="submit" class="btn btn-highlight">Generate Quiz with AI</button>
+            
+            {% else %}
+            <div class="form-group">
+                <label for="title">Quiz Title</label>
+                <input type="text" id="title" name="title" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="description">Description</label>
+                <textarea id="title" name="description" rows="4" required></textarea>
+            </div>
+        </div>
+    </div>
+</div>

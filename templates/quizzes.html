@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+
+{% block title %}ClassQuiz - Quizzes{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <h1 class="dashboard-title">Your Quizzes</h1>
+    
+    <nav class="dashboard-nav">
+        <ul>
+            <li><a href="{{ url_for('teacher_dashboard') }}">Overview</a></li>
+            <li class="active"><a href="{{ url_for('quizzes') }}">Quizzes</a></li>
+            <li><a href="{{ url_for('classrooms') }}">Classrooms</a></li>
+            <li><a href="#">Reports</a></li>
+            <li><a href="#">Generate Quiz</a></li>
+        </ul>
+    </nav>
+    
+    <div class="dashboard-header">
+        <h2>Your Quizzes</h2>
+        <div class="dashboard-actions">
+            <a href="{{ url_for('create_quiz') }}" class="btn btn-primary">Create Quiz Manually</a>
+            <a href="{{ url_for('ai_generate_quiz') }}" class="btn btn-highlight">AI Generate Quiz</a>
+        </div>
+    </div>
+    
+    <div class="quizzes-grid">
+        {% for quiz in quizzes %}
+        <div class="quiz-card">
+            <h3>{{ quiz.title }}</h3>
+            <p>{{ quiz.description }}</p>
+            <div class="quiz-meta">
+                <span>Questions: {{ quiz.questions|length }}</span>
+                <span>Difficulty: {{ quiz.difficulty }}</span>
+                <span>Attempts: 0</span>
+                <span>Avg. Score: 0%</span>
+            </div>
+            <div class="quiz-actions">
+                <a href="#" class="btn btn-text">Details</a>
+                <a href="#" class="btn btn-primary">Assign</a>
+            </div>
+        </div>
+        {% else %}
+        <p class="no-quizzes">You haven't created any quizzes yet.</p>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

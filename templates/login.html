@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+
+{% block title %}ClassQuiz - Login{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-card">
+        <h2 class="auth-title">ClassQuiz Login</h2>
+        <p class="auth-subtitle">Enter your credentials to access your account</p>
+        
+        <form method="POST" action="{{ url_for('login') }}">
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email" placeholder="email@example.com" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" placeholder="••••••" required>
+            </div>
+            
+            <button type="submit" class="btn btn-primary btn-block">Login</button>
+        </form>
+        
+        <div class="demo-accounts">
+            <h3>Demo Accounts:</h3>
+            <div class="demo-account">
+                <span>Teacher:</span>
+                <span>johnson@school.edu</span>
+            </div>
+            <div class="demo-account">
+                <span>Student:</span>
+                <span>alex@student.edu</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

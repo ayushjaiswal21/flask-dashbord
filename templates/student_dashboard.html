@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+
+{% block title %}ClassQuiz - Student Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <h1 class="dashboard-title">Student Dashboard</h1>
+    <p class="dashboard-subtitle">View your quizzes and track your progress</p>
+    
+    <div class="stats-cards">
+        <div class="stat-card">
+            <div class="stat-value">{{ available_quizzes|length }}</div>
+            <div class="stat-label">Available Quizzes</div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-value">{{ completed_quizzes|length }}</div>
+            <div class="stat-label">Completed Quizzes</div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-value">{{ avg_score }}%</div>
+            <div class="stat-label">Average Score</div>
+        </div>
+    </div>
+    
+    <div class="tabs">
+        <button class="tab-btn active" data-tab="available">Available Quizzes</button>
+        <button class="tab-btn" data-tab="completed">Completed Quizzes</button>
+    </div>
+    
+    <div id="available-tab" class="tab-content active">
+        {% for quiz in available_quizzes %}
+        <div class="quiz-card">
+            <h3>{{ quiz.title }}</h3>
+            <p>{{ quiz.description }}</p>
+            <div class="quiz-meta">
+                <span>Questions: {{ quiz.questions|length }}</span>
+                <span>Difficulty: {{ quiz.difficulty }}</span>
+                <span>Time Limit: 5 min</span>
+            </div>
+            <a href="#" class="btn btn-primary">Start Quiz</a>
+        </div>
+        {% else %}
+        <p class="no-quizzes">No available quizzes.</p>
+        {% endfor %}
+    </div>
+    
+    <div id="completed-tab" class="tab-content">
+        {% for result in completed_quizzes %}
+        <div class="quiz-card">
+            <h3>{{ result.quiz.title }}</h3>
+            <div class="quiz-meta">
+                <span>Score: {{ result.score }}%</span>
+                <span>Completed: {{ result.completed_date.strftime('%Y-%m-%d') }}</span>
+            </div>
+            <a href="#" class="btn btn-secondary">View Results</a>
+        </div>
+        {% else %}
+        <p class="no-quizzes">No completed quizzes.</p>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const tabBtns = document.querySelectorAll('.tab-btn');
+        const tabContents = document.querySelectorAll('.tab-content');
+        
+        tabBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const tab = this.dataset.tab;
+                
+                // Remove active class from all buttons and contents
+                tabBtns.forEach(b => b.classList.remove('active'));
+                tabContents.forEach(c => c.classList.remove('active'));
+                
+                // Add active class to clicked button and corresponding content
+                this.classList.add('active');
+                document.getElementById(`${tab}-tab`).classList.add('active');
+            });
+        });
+    });
+</script>
+{% endblock %}
