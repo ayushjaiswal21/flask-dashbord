@@ -10,9 +10,9 @@
         
         <form method="POST" action="{{ url_for('signup') }}">
             <div class="role-selector">
-                <button type="button" class="role-btn active" data-role="teacher">I'm a Teacher</button>
-                <button type="button" class="role-btn" data-role="student">I'm a Student</button>
-                <input type="hidden" name="role" id="selectedRole" value="teacher" required>
+                <button type="button" class="role-btn {% if request.args.get('role') != 'student' %}active{% endif %}" data-role="teacher">I'm a Teacher</button>
+                <button type="button" class="role-btn {% if request.args.get('role') == 'student' %}active{% endif %}" data-role="student">I'm a Student</button>
+                <input type="hidden" name="role" id="selectedRole" value="{{ request.args.get('role', 'teacher') }}" required>
             </div>
 
             <div class="form-group">
@@ -33,7 +33,9 @@
             <button type="submit" class="btn btn-highlight btn-block">Create Account</button>
         </form>
 
-        <p class="auth-footer">Already have an account? <a href="{{ url_for('login') }}">Log in</a></p>
+        <p class="auth-footer">Already have an account? 
+            <a href="{{ url_for('login', role=request.args.get('role', 'teacher')) }}">Log in</a>
+        </p>
     </div>
 </div>
 {% endblock %}

@@ -3,38 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}ClassQuiz{% endblock %}</title>
+    <title>{% block title %}AssessAI{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
     {% block extra_head %}{% endblock %}
 </head>
 <body>
     <header>
         <div class="header-container">
-            <a href="/" class="logo">ClassQuiz</a>
+            <a href="/" class="logo">AssessAI</a>
             <div class="header-right">
                 {% if session.get('user_id') %}
-                    <span class="welcome-message">Welcome, {{ session.get('name') }}</span>
+                    <span class="welcome-message">Welcome, {{ session.get('name') }} 
+                        {% if session.get('role') %}
+                            ({{ session.get('role')|capitalize }})
+                        {% endif %}
+                    </span>
                     <a href="{{ url_for('logout') }}" class="btn btn-secondary">Logout</a>
                 {% else %}
                     <a href="{{ url_for('signup') }}" class="btn btn-secondary">Sign Up</a>
-                    <a href="{{ url_for('login') }}" class="btn btn-primary">Login</a>
+                    <div class="dropdown">
+                        <button class="btn btn-primary dropdown-toggle">Login</button>
+                        <div class="dropdown-content">
+                            <a href="{{ url_for('login', role='teacher') }}">Teacher Login</a>
+                            <a href="{{ url_for('login', role='student') }}">Student Login</a>
+                        </div>
+                    </div>
                 {% endif %}
             </div>
         </div>
     </header>
-
-    <div class="header-right">
-        {% if session.get('user_id') %}
-            <span class="welcome-message">Welcome, {{ session.get('name') }}</span>
-            <a href="{{ url_for('logout') }}" class="btn btn-secondary">Logout</a>
-        {% else %}
-            <a href="{{ url_for('signup') }}" class="btn btn-secondary">Sign Up</a>
-            <div class="login-options">
-                <a href="{{ url_for('login', role='teacher') }}" class="btn btn-primary">Teacher Login</a>
-                <a href="{{ url_for('login', role='student') }}" class="btn btn-primary">Student Login</a>
-            </div>
-        {% endif %}
-    </div>
 
     <main>
         {% with messages = get_flashed_messages() %}
@@ -49,12 +46,6 @@
 
         {% block content %}{% endblock %}
     </main>
-
-    <footer>
-        <div class="footer-container">
-            <p>&copy; 2023 ClassQuiz - A Classroom Quiz Management System</p>
-        </div>
-    </footer>
 
     <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
     {% block extra_scripts %}{% endblock %}

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>ClassQuiz Application</title>
+    <title>AssessAI - AI-Powered Assessment Platform</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
@@ -9,11 +9,17 @@
 <body>
     <div class="auth-container">
         <div class="auth-card">
-            <h1>Welcome to ClassQuiz</h1>
-            <p>An AI-powered quiz generation tool for educators</p>
-            <div class="auth-actions">
+            <div style="text-align: center; margin-bottom: 1.5rem;">
+                <img src="{{ url_for('static', filename='images/assessai-logo.jpg') }}" alt="AssessAI Logo" width="150">
+            </div>
+            <h1 style="color: var(--primary-color); text-align: center; font-size: 2rem; margin-bottom: 1rem;">Welcome to AssessAI</h1>
+            <p style="text-align: center; margin-bottom: 2rem;">AI-powered quiz generation for smarter assessments</p>
+            <div class="auth-actions" style="display: flex; gap: 1rem; justify-content: center;">
                 <a href="{{ url_for('signup') }}" class="btn btn-highlight">Get Started</a>
-                <a href="{{ url_for('login') }}" class="btn btn-secondary">Login</a>
+                <div class="login-options" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                    <a href="{{ url_for('login', role='teacher') }}" class="btn btn-secondary">Teacher Login</a>
+                    <a href="{{ url_for('login', role='student') }}" class="btn btn-secondary">Student Login</a>
+                </div>
             </div>
         </div>
     </div>

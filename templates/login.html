@@ -14,7 +14,7 @@
         </h2>
         
         <form method="POST" action="{{ url_for('login') }}">
-            <input type="hidden" name="role" value="{{ request.args.get('role') or 'student' }}">
+            <input type="hidden" name="role" value="{{ request.args.get('role', 'student') }}">
             
             <div class="form-group">
                 <label for="email">Email</label>
@@ -30,8 +30,16 @@
         </form>
         
         <p class="auth-footer">
-            Don't have an account? <a href="{{ url_for('signup') }}">Sign up</a>
+            Don't have an account? <a href="{{ url_for('signup', role=request.args.get('role', 'student')) }}">Sign up</a>
         </p>
+        
+        <div class="auth-switch">
+            {% if request.args.get('role') == 'teacher' %}
+            <p>Are you a student? <a href="{{ url_for('login', role='student') }}">Student Login</a></p>
+            {% else %}
+            <p>Are you a teacher? <a href="{{ url_for('login', role='teacher') }}">Teacher Login</a></p>
+            {% endif %}
+        </div>
     </div>
 </div>
 {% endblock %}
