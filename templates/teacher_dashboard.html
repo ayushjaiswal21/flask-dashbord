@@ -46,7 +46,7 @@
                         {% for classroom in classrooms[:2] %}
                         <div class="classroom-item">
                             <h3>{{ classroom.name }}</h3>
-                            <p>{{ classroom.students|length }} students</p>
+                            <p>{{ classroom.students.count() }} students</p>
                         </div>
                         {% endfor %}
                     </div>

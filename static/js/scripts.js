@@ -1,290 +1,242 @@
 // DOM Elements
 const errorContainer = document.getElementById('errorContainer');
 const quizContainer = document.getElementById('quizContainer');
+let saveBtn = null; // Track save button instance
 
 // Generate Quiz Function
 async function generateQuiz() {
-    // Get form elements
     const form = document.getElementById('quizForm');
     if (!form) return;
-    
-    // Get form data
-    const formData = new FormData(form);
-    const topics = formData.get('topics').split(',').map(t => t.trim()).filter(t => t);
-    const qType = formData.get('q_type');
-    const difficulty = formData.get('difficulty');
-    const numQuestions = parseInt(formData.get('num_questions'));
 
-    // Validate inputs
-    if (!topics.length || !qType || !difficulty || isNaN(numQuestions)) {
-        displayError("All fields are required!");
-        return;
+    // Clear previous save button
+    if (saveBtn) {
+        saveBtn.remove();
+        saveBtn = null;
     }
+
+    // Get form data with validation
+    const formData = new FormData(form);
+    const topics = formData.get('topics')?.split(',').map(t => t.trim()).filter(t => t) || [];
     
-    if (numQuestions < 1 || numQuestions > 20) {
-        displayError("Please choose between 1 and 20 questions!");
+    // Add CSRF token
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+    if (!csrfToken) {
+        displayError("Security token missing. Please refresh the page.");
         return;
     }
 
     try {
         // Show loading state
-        quizContainer.innerHTML = "<div class='loading'>Generating quiz questions...</div>";
+        quizContainer.innerHTML = `<div class="loading">
+            <div class="spinner"></div>
+            Generating quiz questions...
+        </div>`;
         clearError();
 
-        // Prepare request data
-        const requestData = {
-            topics: topics,
-            type: qType,
-            difficulty: difficulty,
-            num_questions: numQuestions
-        };
-
-        // Send request
-        const response = await fetch("/api/generate-quiz-api", {
+        // API request
+        const response = await fetch("/api/generate-quiz", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
+                "X-CSRFToken": csrfToken
             },
-            body: JSON.stringify(requestData),
+            body: JSON.stringify({
+                topics: topics,
+                type: formData.get('q_type'),
+                difficulty: formData.get('difficulty'),
+                num_questions: parseInt(formData.get('num_questions'))
+            })
         });
 
-        // Handle response
+        // Error handling
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || `Request failed with status ${response.status}`);
+            const error = await response.json().catch(() => ({ error: "Unknown error" }));
+            throw new Error(error.message || `Request failed (${response.status})`);
         }
 
         const data = await response.json();
+        if (!data?.questions?.length) throw new Error("No questions generated");
         
-        if (!data.questions || !data.questions.length) {
-            throw new Error("No questions were generated");
-        }
-
-        // Display the quiz
-        displayQuiz(data.questions, qType);
+        displayQuiz(data.questions, formData.get('q_type'));
 
     } catch (error) {
         console.error("Quiz generation error:", error);
-        displayError(`Failed to generate quiz: ${error.message}`);
+        displayError(error.message);
         quizContainer.innerHTML = "";
     }
 }
 
-// Display Generated Quiz
-function displayQuiz(questions, questionType) {
-    if (!questions.length) {
-        quizContainer.innerHTML = "<p>No questions were generated</p>";
-        return;
-    }
-
-    let quizHTML = '';
-    
-    questions.forEach((q, i) => {
-        const questionText = escapeHTML(q.question || "No question text");
-        const answerText = escapeHTML(q.answer || "No answer provided");
+// Display Generated Quiz (Improved option parsing)
+function displayQuiz(questions) {
+    quizContainer.innerHTML = questions.map((q, i) => {
+        const options = parseOptions(q.question);
+        const isMCQ = options.length > 0;
         
-        let optionsHTML = '';
-        let isMultipleChoice = false;
-        let questionContent = questionText;
-        
-        // Parse multiple choice options
-        const optionRegex = /([A-Da-d]\))\s*(.+?)(?=\s+[A-Da-d]\)|$)/g;
-        const options = [];
-        let match;
-        
-        while ((match = optionRegex.exec(questionText)) !== null) {
-            options.push({
-                letter: match[1].charAt(0).toUpperCase(),
-                text: match[2].trim()
-            });
-            questionContent = questionContent.replace(match[0], '');
-        }
-        
-        // Build options HTML if multiple choice
-        if (options.length > 0) {
-            isMultipleChoice = true;
-            options.forEach(opt => {
-                optionsHTML += `
-                    <div class="option">
-                        <input type="radio" name="question_${i}" id="q${i}_opt${opt.letter}" value="${opt.letter}">
-                        <label for="q${i}_opt${opt.letter}">${opt.letter}) ${opt.text}</label>
+        return `
+            <div class="question" data-answer="${q.answer.trim().toUpperCase()}" data-index="${i}">
+                <h3>Question ${i + 1}</h3>
+                <div class="question-text">${escapeHTML(q.question)}</div>
+                ${isMCQ ? `
+                    <div class="options">
+                        ${options.map((opt, j) => `
+                            <div class="option">
+                                <input type="radio" name="question_${i}" 
+                                       id="q${i}_opt${j}" 
+                                       value="${opt.letter}">
+                                <label for="q${i}_opt${j}">${opt.letter}) ${opt.text}</label>
+                            </div>
+                        `).join('')}
                     </div>
-                `;
-            });
-        }
-        
-        // Build question HTML
-        quizHTML += `
-            <div class="question" data-answer="${answerText.trim().toUpperCase()}" data-index="${i}">
-                <h3>Question ${i + 1}:</h3>
-                <div class="question-text">${questionContent}</div>
-                
-                ${isMultipleChoice ? `
-                    <div class="options">${optionsHTML}</div>
-                    <button class="btn btn-primary confirm-btn" onclick="checkAnswer(${i})">Check Answer</button>
-                    <div id="result_${i}" class="result hidden"></div>
+                    <button class="btn confirm-btn" onclick="checkAnswer(${i})">
+                        Check Answer
+                    </button>
+                    <div id="result_${i}" class="result"></div>
                 ` : `
                     <details class="answer-details">
                         <summary>Show Answer</summary>
-                        <div class="answer-text">${answerText}</div>
+                        <div class="answer-text">${escapeHTML(q.answer)}</div>
                     </details>
                 `}
             </div>
         `;
-    });
-    
-    quizContainer.innerHTML = quizHTML;
-    
-    // Add save button if not present
-    if (!document.getElementById('saveQuizBtn')) {
-        const saveBtn = document.createElement('button');
+    }).join('');
+
+    // Add save button
+    if (!saveBtn) {
+        saveBtn = document.createElement('button');
         saveBtn.id = 'saveQuizBtn';
-        saveBtn.className = 'btn btn-primary';
+        saveBtn.className = 'btn btn-primary mt-3';
         saveBtn.textContent = 'Save Quiz';
         saveBtn.onclick = saveQuiz;
-        quizContainer.insertAdjacentElement('afterend', saveBtn);
+        quizContainer.after(saveBtn);
     }
 }
 
-// Check Answer Function
-function checkAnswer(questionIndex) {
-    const questionEl = document.querySelector(`.question[data-index="${questionIndex}"]`);
-    const selectedOption = questionEl.querySelector(`input[name="question_${questionIndex}"]:checked`);
-    const correctAnswer = questionEl.dataset.answer;
-    const resultEl = document.getElementById(`result_${questionIndex}`);
+// Improved option parsing
+function parseOptions(questionText) {
+    const optionRegex = /^([A-E])[).]\s*(.+)$/gm;
+    const matches = [];
+    let match;
     
-    if (!selectedOption) {
-        resultEl.textContent = "Please select an answer first!";
+    while ((match = optionRegex.exec(questionText)) !== null) {
+        matches.push({
+            letter: match[1].toUpperCase(),
+            text: match[2].trim()
+        });
+    }
+    return matches;
+}
+
+// Enhanced answer checking
+function checkAnswer(index) {
+    const questionEl = document.querySelector(`.question[data-index="${index}"]`);
+    const selected = questionEl.querySelector('input:checked');
+    const resultEl = document.getElementById(`result_${index}`);
+    
+    if (!selected) {
+        resultEl.textContent = "Please select an answer!";
         resultEl.className = "result error";
-        resultEl.classList.remove("hidden");
         return;
     }
-    
-    const selectedValue = selectedOption.value.toUpperCase();
-    const isCorrect = selectedValue === correctAnswer;
-    
-    resultEl.textContent = isCorrect 
+
+    const correct = selected.value === questionEl.dataset.answer;
+    resultEl.textContent = correct 
         ? "✓ Correct!" 
-        : `✗ Incorrect! The correct answer is ${correctAnswer}`;
+        : `✗ Incorrect. Correct answer: ${questionEl.dataset.answer}`;
+    resultEl.className = `result ${correct ? 'correct' : 'incorrect'}`;
     
-    resultEl.className = isCorrect ? "result correct" : "result incorrect";
-    resultEl.classList.remove("hidden");
-    
-    // Disable interaction after answering
-    questionEl.querySelectorAll('input[type="radio"]').forEach(radio => {
-        radio.disabled = true;
-    });
-    
-    const confirmBtn = questionEl.querySelector('.confirm-btn');
-    if (confirmBtn) confirmBtn.disabled = true;
+    // Visual feedback
+    questionEl.classList.add(correct ? 'answered-correct' : 'answered-wrong');
+    questionEl.querySelectorAll('input').forEach(i => i.disabled = true);
 }
 
-// Save Quiz Function
+// Enhanced save function
 async function saveQuiz() {
-    const title = document.getElementById('title')?.value;
-    const description = document.getElementById('description')?.value;
-    
-    if (!title) {
-        displayError("Quiz title is required");
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+    if (!csrfToken) {
+        displayError("Security token missing. Please refresh.");
         return;
     }
-    
-    const questions = [];
-    document.querySelectorAll('.question').forEach((qEl, i) => {
-        const question = {
-            text: qEl.querySelector('.question-text').textContent,
-            options: [],
-            correct_answer: qEl.dataset.answer
-        };
-        
-        // Get options if multiple choice
-        qEl.querySelectorAll('.option label').forEach(opt => {
-            question.options.push(opt.textContent.trim());
-        });
-        
-        questions.push(question);
-    });
-    
+
+    const questions = Array.from(document.querySelectorAll('.question')).map(q => ({
+        text: q.querySelector('.question-text').textContent,
+        options: Array.from(q.querySelectorAll('.option label')).map(l => l.textContent.trim()),
+        correct_answer: q.dataset.answer
+    }));
+
     try {
-        const formData = new FormData();
-        formData.append('title', title);
-        if (description) formData.append('description', description);
+        saveBtn.disabled = true;
+        saveBtn.textContent = "Saving...";
         
-        questions.forEach((q, i) => {
-            formData.append(`question_${i+1}`, q.text);
-            q.options.forEach((opt, j) => {
-                formData.append(`option_${i+1}_${j+1}`, opt);
-            });
-            formData.append(`correct_${i+1}`, q.correct_answer);
-        });
-        
-        const response = await fetch('/create-quiz', {
+        const response = await fetch('/quizzes/save', {
             method: 'POST',
-            body: formData
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                title: document.getElementById('quizTitle')?.value || "Untitled Quiz",
+                description: document.getElementById('quizDesc')?.value || "",
+                questions: questions
+            })
         });
-        
-        if (!response.ok) {
-            throw new Error('Failed to save quiz');
-        }
-        
+
+        if (!response.ok) throw new Error(`Save failed: ${response.status}`);
         window.location.href = '/quizzes';
-        
+
     } catch (error) {
-        console.error("Save quiz error:", error);
+        console.error("Save error:", error);
         displayError(error.message);
+        saveBtn.disabled = false;
+        saveBtn.textContent = "Save Quiz";
     }
 }
 
-// Helper Functions
-function displayError(message) {
+// Error handling utilities
+function displayError(message, duration = 5000) {
     if (!errorContainer) return;
-    errorContainer.textContent = message;
-    errorContainer.classList.remove("hidden");
-    setTimeout(() => errorContainer.classList.add("hidden"), 5000);
+    errorContainer.innerHTML = `
+        <div class="alert error">
+            <span class="close-btn">&times;</span>
+            ${escapeHTML(message)}
+        </div>
+    `;
+    errorContainer.querySelector('.close-btn').onclick = clearError;
+    setTimeout(clearError, duration);
 }
 
 function clearError() {
-    if (errorContainer) {
-        errorContainer.textContent = "";
-        errorContainer.classList.add("hidden");
-    }
+    errorContainer.innerHTML = '';
 }
 
+// Security and UI helpers
 function escapeHTML(str) {
-    if (!str) return "";
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
+    return str.toString()
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
 }
 
-// Event Listeners
+// Event listeners
 document.addEventListener('DOMContentLoaded', () => {
-    // Generate quiz button
-    const generateBtn = document.getElementById('generateBtn');
-    if (generateBtn) {
-        generateBtn.addEventListener('click', generateQuiz);
-    }
-    
-    // Form submission
-    const quizForm = document.getElementById('quizForm');
-    if (quizForm) {
-        quizForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            generateQuiz();
+    // Tab switching (updated to match HTML)
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const target = this.dataset.tab;
+            document.querySelectorAll('.tab-content').forEach(c => 
+                c.classList.toggle('active', c.id === target)
+            );
+            document.querySelectorAll('.tab-btn').forEach(b => 
+                b.classList.toggle('active', b === this)
+            );
         });
-    }
-    
-    // Tab switching
-    const tabBtns = document.querySelectorAll('.tab-btn');
-    if (tabBtns.length) {
-        tabBtns.forEach(btn => {
-            btn.addEventListener('click', function() {
-                const tab = this.dataset.tab;
-                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                this.classList.add('active');
-                document.getElementById(`${tab}-tab`).classList.add('active');
-            });
-        });
-    }
+    });
+
+    // Form handling
+    document.getElementById('quizForm')?.addEventListener('submit', e => {
+        e.preventDefault();
+        generateQuiz();
+    });
 });

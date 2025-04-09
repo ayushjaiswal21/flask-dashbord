@@ -1,5 +1,8 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
-from models import db, User, Quiz, Classroom, Question
+from flask_wtf import FlaskForm
+from wtforms import SelectField, DateTimeField, SubmitField
+from wtforms.validators import DataRequired
+from models import db, User, Quiz, Classroom, Question, QuizResult
 import os
 import time
 import json
@@ -9,6 +12,7 @@ import mysql.connector
 from flask_cors import CORS
 from dotenv import load_dotenv
 from mysql.connector import Error as DBError
+from functools import wraps
 
 # Set up logging with DEBUG level
 logging.basicConfig(
@@ -29,6 +33,31 @@ db.init_app(app)
 # Replace before_first_request with app context
 with app.app_context():
     db.create_all()
+
+# Decorator for requiring teacher access
+def teacher_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session or session['user_type'] != 'teacher':
+            flash('Teacher access required', 'error')
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# Decorator for requiring student access
+def student_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session or session['user_type'] != 'student':
+            flash('Student access required', 'error')
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+class AssignQuizForm(FlaskForm):
+    classroom_id = SelectField('Classroom', validators=[DataRequired()], coerce=int)
+    due_date = DateTimeField('Due Date', validators=[DataRequired()], format='%Y-%m-%dT%H:%M')
+    submit = SubmitField('Assign Quiz')
 
 class DatabaseManager:
     @staticmethod
@@ -77,7 +106,7 @@ class DatabaseManager:
             logger.error(f"Database error: {str(e)}")
             return False, str(e)
         finally:
-            if db.is_connected():
+            if db and db.is_connected():
                 db.close()
 
 class QuizGenerator:
@@ -215,7 +244,8 @@ class QuizGenerator:
                     print(f"Unprocessed lines: {current_question}")
             
             if not questions:
-                raise ValueError("No valid questions found in response")
+                logger.error("No questions found in generated text. Raw output: " + generated_text[:200])
+                raise ValueError("No valid questions found in response - please try different topics or parameters")
                 
             print(f"Successfully parsed {len(questions)} questions")
             return questions[:num_questions], None
@@ -305,10 +335,8 @@ def logout():
     return redirect(url_for('index'))
 
 @app.route('/teacher-dashboard')
+@teacher_required
 def teacher_dashboard():
-    if 'user_id' not in session or session['user_type'] != 'teacher':
-        return redirect(url_for('login'))
-    
     teacher_id = session['user_id']
     quizzes = Quiz.query.filter_by(teacher_id=teacher_id).all()
     classrooms = Classroom.query.filter_by(teacher_id=teacher_id).all()
@@ -316,12 +344,10 @@ def teacher_dashboard():
     return render_template('teacher_dashboard.html', quizzes=quizzes, classrooms=classrooms)
 
 @app.route('/student-dashboard')
+@student_required
 def student_dashboard():
-    if 'user_id' not in session or session['user_type'] != 'student':
-        return redirect(url_for('login'))
-    
     student_id = session['user_id']
-    student = User.query.get(student_id)  # Changed from Student.query to User.query
+    student = User.query.get(student_id)
     
     available_quizzes = []
     completed_quizzes = []
@@ -355,33 +381,45 @@ def student_dashboard():
                          avg_score=avg_score)
 
 @app.route('/quizzes')
+@teacher_required
 def quizzes():
-    if 'user_id' not in session or session['user_type'] != 'teacher':
-        return redirect(url_for('login'))
-    
     teacher_id = session['user_id']
     quizzes = Quiz.query.filter_by(teacher_id=teacher_id).all()
     
     return render_template('quizzes.html', quizzes=quizzes)
 
-@app.route('/classrooms')
-def classrooms():
-    if 'user_id' not in session or session['user_type'] != 'teacher':
-        return redirect(url_for('login'))
+@app.route('/quiz/<int:quiz_id>')
+@teacher_required
+def quiz_details(quiz_id):
+    quiz = Quiz.query.options(
+        db.joinedload(Quiz.questions),
+        db.joinedload(Quiz.assignments).joinedload(QuizAssignment.classroom)
+    ).get_or_404(quiz_id)
     
+    if quiz.teacher_id != session['user_id']:
+        flash('You do not have permission to view this quiz', 'error')
+        return redirect(url_for('quizzes'))
+    
+    return render_template('quiz_details.html', quiz=quiz)
+
+@app.route('/classrooms')
+@teacher_required
+def classrooms():
     teacher_id = session['user_id']
     classrooms = Classroom.query.filter_by(teacher_id=teacher_id).all()
     
     return render_template('classrooms.html', classrooms=classrooms)
 
 @app.route('/create-quiz', methods=['GET', 'POST'])
+@teacher_required
 def create_quiz():
-    if 'user_id' not in session or session['user_type'] != 'teacher':
-        return redirect(url_for('login'))
-    
     if request.method == 'POST':
-        title = request.form['title']
-        description = request.form['description']
+        title = request.form['title'].strip()
+        description = request.form['description'].strip()
+        
+        if not title:
+            flash('Quiz title is required')
+            return redirect(url_for('create_quiz'))
         
         new_quiz = Quiz(
             title=title,
@@ -397,17 +435,29 @@ def create_quiz():
         questions_data = []
         i = 1
         while f'question_{i}' in request.form:
-            question_text = request.form[f'question_{i}']
+            question_text = request.form[f'question_{i}'].strip()
+            
+            if not question_text:
+                i += 1
+                continue
+                
             options = []
             
             # Get options if they exist
             j = 1
             while f'option_{i}_{j}' in request.form:
-                options.append(request.form[f'option_{i}_{j}'])
+                option = request.form[f'option_{i}_{j}'].strip()
+                if option:
+                    options.append(option)
                 j += 1
             
-            correct_answer = request.form.get(f'correct_{i}', '')
+            correct_answer = request.form.get(f'correct_{i}', '').strip()
             
+            # Validate correct answer
+            if not correct_answer:
+                flash(f'Question {i} is missing a correct answer')
+                continue
+                
             # Create a new question
             question = Question(
                 quiz_id=new_quiz.id,
@@ -426,13 +476,23 @@ def create_quiz():
     return render_template('create_quiz.html')
 
 @app.route('/ai-generate-quiz', methods=['GET', 'POST'])
+@teacher_required
 def ai_generate_quiz():
-    if 'user_id' not in session or session['user_type'] != 'teacher':
-        return redirect(url_for('login'))
-    
     if request.method == 'POST':
-        subject = request.form['subject']
-        num_questions = int(request.form['num_questions'])
+        subject = request.form['subject'].strip()
+        
+        if not subject:
+            flash('Subject is required')
+            return redirect(url_for('ai_generate_quiz'))
+            
+        try:
+            num_questions = int(request.form['num_questions'])
+            if num_questions <= 0:
+                raise ValueError("Number of questions must be positive")
+        except ValueError:
+            flash('Number of questions must be a positive number')
+            return redirect(url_for('ai_generate_quiz'))
+            
         difficulty = request.form['difficulty']
         
         # Call AI quiz generation function
@@ -445,7 +505,8 @@ def ai_generate_quiz():
         new_quiz = Quiz(
             title=f"{subject} Quiz",
             description=f"AI-generated quiz about {subject}",
-            teacher_id=session['user_id']
+            teacher_id=session['user_id'],
+            difficulty=difficulty
         )
         
         db.session.add(new_quiz)
@@ -467,33 +528,44 @@ def ai_generate_quiz():
     
     return render_template('create_quiz.html', ai_generate=True)
 
-@app.route('/assign-quiz/<int:quiz_id>', methods=['POST'])
+@app.route('/assign-quiz/<int:quiz_id>', methods=['GET', 'POST'])
+@teacher_required
 def assign_quiz(quiz_id):
-    if 'user_id' not in session or session['user_type'] != 'teacher':
-        return redirect(url_for('login'))
+    quiz = Quiz.query.get_or_404(quiz_id)
+    classrooms = Classroom.query.filter_by(teacher_id=session['user_id']).all()
     
-    # Logic to assign quiz to classroom
-    classroom_id = request.form['classroom_id']
+    form = AssignQuizForm()
+    form.classroom_id.choices = [(c.id, c.name) for c in classrooms]
     
-    # Verify both quiz and classroom exist and belong to this teacher
-    quiz = Quiz.query.get(quiz_id)
-    classroom = Classroom.query.get(classroom_id)
-    
-    if not quiz or not classroom or quiz.teacher_id != session['user_id'] or classroom.teacher_id != session['user_id']:
-        flash('Invalid quiz or classroom')
+    if form.validate_on_submit():
+        classroom = Classroom.query.get(form.classroom_id.data)
+        
+        if not classroom or classroom.teacher_id != session['user_id']:
+            flash('Invalid classroom', 'error')
+            return redirect(url_for('quizzes'))
+            
+        # Check if already assigned
+        assignment = QuizAssignment.query.filter_by(
+            quiz_id=quiz.id,
+            classroom_id=classroom.id
+        ).first()
+        
+        if assignment:
+            assignment.due_date = form.due_date.data
+            flash('Updated due date for existing assignment', 'info')
+        else:
+            assignment = QuizAssignment(
+                quiz_id=quiz.id,
+                classroom_id=classroom.id,
+                due_date=form.due_date.data
+            )
+            db.session.add(assignment)
+            flash('Quiz assigned successfully!', 'success')
+        
+        db.session.commit()
         return redirect(url_for('quizzes'))
     
-    # Add the quiz to the classroom
-    # This assumes there's a many-to-many relationship between Quiz and Classroom
-    # If your model is different, adjust this code accordingly
-    if classroom not in quiz.classrooms:
-        quiz.classrooms.append(classroom)
-        db.session.commit()
-        flash(f'Quiz "{quiz.title}" has been assigned to classroom "{classroom.name}"')
-    else:
-        flash(f'Quiz is already assigned to this classroom')
-    
-    return redirect(url_for('quizzes'))
+    return render_template('assign_quiz.html', quiz=quiz, form=form)
 
 @app.route("/api/generate-quiz-api", methods=["POST"])
 def generate_quiz_api():
@@ -552,14 +624,12 @@ def generate_quiz_api():
         logger.error(f"Server error: {str(e)}", exc_info=True)
         return jsonify({"error": "Internal server error"}), 500
 
-# Add these routes before the if __name__ == '__main__' block
-
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     if request.method == 'POST':
         try:
-            name = request.form['name']
-            email = request.form['email']
+            name = request.form['name'].strip()
+            email = request.form['email'].strip()
             password = request.form['password']
             role = request.form.get('role', 'student')
             
@@ -598,6 +668,58 @@ def teacher_login():
 @app.route('/student-login')
 def student_login():
     return render_template('login.html', role='student')
+
+@app.route('/take-quiz/<int:quiz_id>', methods=['GET', 'POST'])
+@student_required
+def take_quiz(quiz_id):
+    quiz = Quiz.query.get_or_404(quiz_id)
+    student_id = session['user_id']
+    
+    # Check if quiz is accessible to this student
+    student = User.query.get(student_id)
+    can_access = False
+    
+    for classroom in student.enrolled_classrooms:
+        if quiz in classroom.quizzes:
+            can_access = True
+            break
+    
+    if not can_access:
+        flash('You do not have access to this quiz')
+        return redirect(url_for('student_dashboard'))
+    
+    # Check if student has already completed this quiz
+    if QuizResult.query.filter_by(user_id=student_id, quiz_id=quiz_id).first():
+        flash('You have already completed this quiz')
+        return redirect(url_for('student_dashboard'))
+    
+    if request.method == 'POST':
+        # Process quiz submission
+        score = 0
+        total_questions = len(quiz.questions)
+        
+        for question in quiz.questions:
+            answer = request.form.get(f'question_{question.id}', '')
+            if answer.strip() == question.correct_answer.strip():
+                score += 1
+        
+        # Calculate percentage score
+        percentage = (score / total_questions) * 100 if total_questions > 0 else 0
+        
+        # Save the result
+        result = QuizResult(
+            user_id=student_id,
+            quiz_id=quiz_id,
+            score=percentage
+        )
+        
+        db.session.add(result)
+        db.session.commit()
+        
+        flash(f'Quiz completed! Your score: {percentage:.1f}%')
+        return redirect(url_for('student_dashboard'))
+    
+    return render_template('take_quiz.html', quiz=quiz)
 
 if __name__ == "__main__":
     required_vars = ['DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME']

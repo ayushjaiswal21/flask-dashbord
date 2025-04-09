@@ -12,48 +12,92 @@
             <li><a href="{{ url_for('quizzes') }}">Quizzes</a></li>
             <li class="active"><a href="{{ url_for('classrooms') }}">Classrooms</a></li>
             <li><a href="#">Reports</a></li>
-            <li><a href="#">Generate Quiz</a></li>
+            <li><a href="{{ url_for('ai_generate_quiz') }}">Generate Quiz</a></li>
         </ul>
     </nav>
     
     <div class="dashboard-content">
+        <div class="dashboard-actions">
+            <!-- Replaced with placeholder link since create_classroom route doesn't exist -->
+            <a href="#" class="btn btn-primary">Create New Classroom</a>
+        </div>
+        
         {% for classroom in classrooms %}
         <div class="classroom-card">
             <h2>{{ classroom.name }}</h2>
-            <p>{{ classroom.students|length }} Students • {{ classroom.assigned_quizzes|length }} Quizzes</p>
+            <!-- Fixed: Using count() method for SQLAlchemy relationships instead of |length -->
+            <p>
+                {% if classroom.students is defined %}
+                    {% if classroom.students.count() is defined %}
+                        {{ classroom.students.count() }} Students
+                    {% else %}
+                        0 Students
+                    {% endif %}
+                {% else %}
+                    0 Students
+                {% endif %}
+                •
+                {% if classroom.quizzes is defined %}
+                    {% if classroom.quizzes.count() is defined %}
+                        {{ classroom.quizzes.count() }} Quizzes
+                    {% else %}
+                        0 Quizzes
+                    {% endif %}
+                {% else %}
+                    0 Quizzes
+                {% endif %}
+            </p>
             
             <div class="classroom-details">
                 <div class="student-list">
                     <h3>Students:</h3>
                     <ul>
-                        {% for student in classroom.students %}
-                        <li>{{ student.name }}</li>
+                        {% if classroom.students is defined %}
+                            {% for student in classroom.students %}
+                            <li>{{ student.name }}</li>
+                            {% else %}
+                            <li>No students yet.</li>
+                            {% endfor %}
                         {% else %}
-                        <li>No students yet.</li>
-                        {% endfor %}
+                            <li>No students yet.</li>
+                        {% endif %}
                     </ul>
                 </div>
                 
                 <div class="quiz-list">
                     <h3>Assigned Quizzes:</h3>
                     <ul>
-                        {% for cq in classroom.assigned_quizzes %}
-                        <li>{{ cq.quiz.title }}</li>
+                        {% if classroom.quizzes is defined %}
+                            {% for quiz in classroom.quizzes %}
+                            <li>
+                                {{ quiz.title }}
+                                {% if quiz.classrooms is defined %}
+                                    {% for qc in quiz.classrooms %}
+                                        {% if qc.classroom_id == classroom.id %}
+                                            (Due: {{ qc.due_date.strftime('%Y-%m-%d %H:%M') if qc.due_date else 'No due date' }})
+                                        {% endif %}
+                                    {% endfor %}
+                                {% endif %}
+                            </li>
+                            {% else %}
+                            <li>No quizzes assigned yet.</li>
+                            {% endfor %}
                         {% else %}
-                        <li>No quizzes assigned yet.</li>
-                        {% endfor %}
+                            <li>No quizzes assigned yet.</li>
+                        {% endif %}
                     </ul>
                 </div>
             </div>
             
             <div class="classroom-actions">
-                <button class="btn btn-secondary">Manage Students</button>
-                <button class="btn btn-primary">Assign Quiz</button>
+                <!-- Replaced with placeholder link since manage_students route doesn't exist -->
+                <a href="#" class="btn btn-secondary">Manage Students</a>
+                <!-- Replaced with placeholder link since assign_quiz_form route doesn't exist -->
+                <a href="#" class="btn btn-primary">Assign Quiz</a>
             </div>
         </div>
         {% else %}
         <p class="no-classrooms">You haven't created any classrooms yet.</p>
-        <a href="#" class="btn btn-primary">Create Classroom</a>
         {% endfor %}
     </div>
 </div>

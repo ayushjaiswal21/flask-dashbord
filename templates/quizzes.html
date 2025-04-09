@@ -12,7 +12,7 @@
             <li class="active"><a href="{{ url_for('quizzes') }}">Quizzes</a></li>
             <li><a href="{{ url_for('classrooms') }}">Classrooms</a></li>
             <li><a href="#">Reports</a></li>
-            <li><a href="#">Generate Quiz</a></li>
+            <li><a href="{{ url_for('ai_generate_quiz') }}">Generate Quiz</a></li>
         </ul>
     </nav>
     
@@ -36,8 +36,10 @@
                 <span>Avg. Score: 0%</span>
             </div>
             <div class="quiz-actions">
-                <a href="#" class="btn btn-text">Details</a>
-                <a href="#" class="btn btn-primary">Assign</a>
+                <!-- Replaced with placeholder link since quiz_details route doesn't exist -->
+                <a href="{{ url_for('quiz_details', quiz_id=quiz.id) }}" class="btn btn-text">Details</a>
+                <!-- Using the assign_quiz route that exists in app.py -->
+                <a href="{{ url_for('assign_quiz', quiz_id=quiz.id) }}" class="btn btn-primary">Assign</a>
             </div>
         </div>
         {% else %}

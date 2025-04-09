@@ -36,13 +36,16 @@ class User(db.Model):
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
-        return check_password_hash(self.password_hash, password)  # Fixed missing parenthesis
+        return check_password_hash(self.password_hash, password)
 
 class Classroom(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     teacher_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-
+    
+    # Add relationship to QuizAssignment
+    assignments = db.relationship('QuizAssignment', back_populates='classroom')
+# Update the Quiz model's relationships
 class Quiz(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(100), nullable=False)
@@ -50,11 +53,19 @@ class Quiz(db.Model):
     created_date = db.Column(db.DateTime, default=datetime.utcnow)
     difficulty = db.Column(db.String(20), default='medium')
     teacher_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    questions = db.relationship('Question', backref='quiz', lazy=True)
-    assigned_classrooms = db.relationship('Classroom',
+    
+    # Changed from lazy='dynamic' to lazy='select'
+    questions = db.relationship('Question', backref='quiz', lazy='select')
+    
+    # Updated assigned_classrooms relationship
+    assigned_classrooms = db.relationship(
+        'Classroom',
         secondary=quiz_classroom,
-        backref=db.backref('quizzes', lazy='dynamic')
+        backref=db.backref('assigned_quizzes', lazy='select')
     )
+    
+    # Add relationship to QuizAssignment
+    assignments = db.relationship('QuizAssignment', back_populates='quiz')
 
 class Question(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -69,3 +80,13 @@ class QuizResult(db.Model):
     quiz_id = db.Column(db.Integer, db.ForeignKey('quiz.id'), nullable=False)
     score = db.Column(db.Float, nullable=False)
     completed_date = db.Column(db.DateTime, default=datetime.utcnow)
+
+class QuizAssignment(db.Model):
+    __tablename__ = 'quiz_assignments'
+    quiz_id = db.Column(db.Integer, db.ForeignKey('quiz.id'), primary_key=True)
+    classroom_id = db.Column(db.Integer, db.ForeignKey('classroom.id'), primary_key=True)
+    due_date = db.Column(db.DateTime)
+    
+    # Use back_populates for bidirectional relationships
+    quiz = db.relationship('Quiz', back_populates='assignments')
+    classroom = db.relationship('Classroom', back_populates='assignments')

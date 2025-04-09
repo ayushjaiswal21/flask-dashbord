@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+
+{% block title %}Create Classroom{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <h1 class="dashboard-title">Create New Classroom</h1>
+    
+    <form method="POST">
+        <div class="form-group">
+            <label for="name">Classroom Name</label>
+            <input type="text" id="name" name="name" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Create Classroom</button>
+        <a href="{{ url_for('classrooms') }}" class="btn btn-secondary">Cancel</a>
+    </form>
+</div>
+{% endblock %}

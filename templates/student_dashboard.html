@@ -29,24 +29,23 @@
         <button class="tab-btn" data-tab="completed">Completed Quizzes</button>
     </div>
     
-    <div id="available-tab" class="tab-content active">
+    <div id="available" class="tab-content active">
         {% for quiz in available_quizzes %}
         <div class="quiz-card">
             <h3>{{ quiz.title }}</h3>
             <p>{{ quiz.description }}</p>
             <div class="quiz-meta">
                 <span>Questions: {{ quiz.questions|length }}</span>
-                <span>Difficulty: {{ quiz.difficulty }}</span>
-                <span>Time Limit: 5 min</span>
+                <span>Due: {{ quiz.due_date.strftime('%Y-%m-%d %H:%M') }}</span>
             </div>
-            <a href="#" class="btn btn-primary">Start Quiz</a>
+            <a href="{{ url_for('take_quiz', quiz_id=quiz.id) }}" class="btn btn-primary">Start Quiz</a>
         </div>
         {% else %}
         <p class="no-quizzes">No available quizzes.</p>
         {% endfor %}
     </div>
     
-    <div id="completed-tab" class="tab-content">
+    <div id="completed" class="tab-content">
         {% for result in completed_quizzes %}
         <div class="quiz-card">
             <h3>{{ result.quiz.title }}</h3>
@@ -54,7 +53,7 @@
                 <span>Score: {{ result.score }}%</span>
                 <span>Completed: {{ result.completed_date.strftime('%Y-%m-%d') }}</span>
             </div>
-            <a href="#" class="btn btn-secondary">View Results</a>
+            <a href="{{ url_for('quiz_results', result_id=result.id) }}" class="btn btn-secondary">View Results</a>
         </div>
         {% else %}
         <p class="no-quizzes">No completed quizzes.</p>
@@ -66,20 +65,25 @@
 {% block extra_scripts %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        const tabBtns = document.querySelectorAll('.tab-btn');
+        const tabs = document.querySelector('.tabs');
+        const tabButtons = tabs.querySelectorAll('.tab-btn');
         const tabContents = document.querySelectorAll('.tab-content');
-        
-        tabBtns.forEach(btn => {
-            btn.addEventListener('click', function() {
-                const tab = this.dataset.tab;
+
+        tabButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const targetTab = button.dataset.tab;
                 
-                // Remove active class from all buttons and contents
-                tabBtns.forEach(b => b.classList.remove('active'));
-                tabContents.forEach(c => c.classList.remove('active'));
+                // Hide all tab contents
+                tabContents.forEach(content => {
+                    content.classList.remove('active');
+                });
                 
-                // Add active class to clicked button and corresponding content
-                this.classList.add('active');
-                document.getElementById(`${tab}-tab`).classList.add('active');
+                // Show target tab content
+                document.getElementById(targetTab).classList.add('active');
+                
+                // Update active state of buttons
+                tabButtons.forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
             });
         });
     });
