@@ -3,6 +3,7 @@ from flask_wtf import FlaskForm
 from wtforms import SelectField, DateTimeField, SubmitField
 from wtforms.validators import DataRequired
 from models import db, User, Quiz, Classroom, Question, QuizResult
+from models import QuizAssignment
 import os
 import time
 import json
