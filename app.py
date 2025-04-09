@@ -14,6 +14,7 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 from mysql.connector import Error as DBError
 from functools import wraps
+from datetime import datetime 
 
 # Set up logging with DEBUG level
 logging.basicConfig(
@@ -306,6 +307,8 @@ def generate_quiz(subject, num_questions, difficulty):
     
     return formatted_questions
 
+
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -348,38 +351,117 @@ def teacher_dashboard():
 @student_required
 def student_dashboard():
     student_id = session['user_id']
-    student = User.query.get(student_id)
+    
+    # Get the student with their enrolled classrooms
+    student = User.query.options(
+        db.joinedload(User.enrolled_classrooms)
+    ).get(student_id)
+    
+    if not student:
+        flash('Student not found', 'error')
+        return redirect(url_for('login'))
     
     available_quizzes = []
     completed_quizzes = []
-    avg_score = 0
     
-    # Get classrooms the student belongs to
-    for classroom in student.enrolled_classrooms:
-        for quiz in classroom.quizzes:
-            # Check if student has completed this quiz
-            result = QuizResult.query.filter_by(
-                user_id=student.id,
-                quiz_id=quiz.id
-            ).first()
-            
-            if result:
-                completed_quizzes.append({
-                    'quiz': quiz,
-                    'result': result
-                })
-            else:
+    # Get all quiz results for this student in one query
+    student_results = {
+        result.quiz_id: result 
+        for result in QuizResult.query.filter_by(user_id=student_id).all()
+    }
+    
+    # Get classroom IDs for the student
+    classroom_ids = [classroom.id for classroom in student.enrolled_classrooms]
+    
+    # Get all assignments for these classrooms
+    assignments = QuizAssignment.query.filter(
+        QuizAssignment.classroom_id.in_(classroom_ids)
+    ).all()
+    
+    # Create a dictionary of quiz_id -> assignment details
+    quiz_assignments = {}
+    for assignment in assignments:
+        quiz_assignments[assignment.quiz_id] = assignment
+    
+    # Get all quizzes from these assignments
+    quiz_ids = [assignment.quiz_id for assignment in assignments]
+    assigned_quizzes = Quiz.query.filter(Quiz.id.in_(quiz_ids)).all()
+    
+    # Process each assigned quiz
+    for quiz in assigned_quizzes:
+        # Check if student has completed this quiz
+        result = student_results.get(quiz.id)
+        assignment = quiz_assignments.get(quiz.id)
+        
+        if result:
+            completed_quizzes.append({
+                'quiz': quiz,
+                'result': result,
+                'date_taken': result.date_taken,
+                'score': result.score,
+                'due_date': assignment.due_date if assignment else None
+            })
+        else:
+            # Add due date to available quizzes
+            if assignment:
+                quiz.due_date = assignment.due_date
                 available_quizzes.append(quiz)
     
-    # Calculate average score if there are completed quizzes
+    # Calculate average score
+    avg_score = 0
     if completed_quizzes:
-        total = sum(result['result'].score for result in completed_quizzes)
-        avg_score = round(total / len(completed_quizzes), 2)
+        avg_score = round(
+            sum(result['score'] for result in completed_quizzes) / 
+            len(completed_quizzes),
+            1
+        )
     
-    return render_template('student_dashboard.html',
-                         available_quizzes=available_quizzes,
-                         completed_quizzes=completed_quizzes,
-                         avg_score=avg_score)
+    # Sort available quizzes by due date (ascending)
+    max_date = datetime.max
+    available_quizzes.sort(key=lambda x: x.due_date or max_date)
+    
+    # Sort completed quizzes by completion date (newest first)
+    completed_quizzes.sort(key=lambda x: x['date_taken'], reverse=True)
+    
+    return render_template(
+        'student_dashboard.html',
+        available_quizzes=available_quizzes,
+        completed_quizzes=completed_quizzes,
+        avg_score=avg_score
+    )
+
+# ADD TO app.py - New route
+@app.route('/classroom/<int:classroom_id>')
+@teacher_required
+def classroom_details(classroom_id):
+    classroom = Classroom.query.get_or_404(classroom_id)
+    
+    # Verify the classroom belongs to the current teacher
+    if classroom.teacher_id != session['user_id']:
+        flash('You do not have permission to view this classroom', 'error')
+        return redirect(url_for('classrooms'))
+    
+    # Get all assignments for this classroom
+    assignments = QuizAssignment.query.filter_by(classroom_id=classroom.id).all()
+    
+    # Create a list of quizzes with their due dates
+    assigned_quizzes = []
+    for assignment in assignments:
+        quiz = Quiz.query.get(assignment.quiz_id)
+        if quiz:
+            assigned_quizzes.append({
+                'quiz': quiz,
+                'due_date': assignment.due_date
+            })
+    
+    # Sort by due date
+    assigned_quizzes.sort(key=lambda x: x['due_date'])
+    
+    return render_template(
+        'classroom_details.html',
+        classroom=classroom,
+        assigned_quizzes=assigned_quizzes
+    )
 
 @app.route('/quizzes')
 @teacher_required
@@ -389,19 +471,61 @@ def quizzes():
     
     return render_template('quizzes.html', quizzes=quizzes)
 
-@app.route('/quiz/<int:quiz_id>')
+@app.route('/quiz/<int:quiz_id>', methods=['GET', 'POST'])
 @teacher_required
 def quiz_details(quiz_id):
-    quiz = Quiz.query.options(
-        db.joinedload(Quiz.questions),
-        db.joinedload(Quiz.assignments).joinedload(QuizAssignment.classroom)
-    ).get_or_404(quiz_id)
+    quiz = Quiz.query.options(db.joinedload(Quiz.questions)).get_or_404(quiz_id)
     
     if quiz.teacher_id != session['user_id']:
         flash('You do not have permission to view this quiz', 'error')
         return redirect(url_for('quizzes'))
     
+    if request.method == 'POST':
+        for question in quiz.questions:
+            question.text = request.form.get(f'question_{question.id}', question.text)
+            question.options = request.form.get(f'options_{question.id}', question.options)
+            question.correct_answer = request.form.get(f'correct_{question.id}', question.correct_answer)
+        db.session.commit()
+        flash('Quiz updated successfully!')
+        return redirect(url_for('quiz_details', quiz_id=quiz.id))
+    
     return render_template('quiz_details.html', quiz=quiz)
+
+# Add this route to handle creating a new classroom
+@app.route('/create-classroom', methods=['GET', 'POST'])
+@teacher_required
+def create_classroom():
+    if request.method == 'POST':
+        name = request.form['name'].strip()
+        if not name:
+            flash('Classroom name is required')
+            return redirect(url_for('create_classroom'))
+        
+        new_classroom = Classroom(
+            name=name,
+            teacher_id=session['user_id']
+        )
+        
+        db.session.add(new_classroom)
+        db.session.commit()
+        
+        flash('Classroom created successfully!')
+        return redirect(url_for('classrooms'))
+    
+    return render_template('create_classroom.html')
+
+# Add this route to handle viewing quiz results
+@app.route('/quiz-results/<int:result_id>')
+@student_required
+def quiz_results(result_id):
+    result = QuizResult.query.get_or_404(result_id)
+    quiz = Quiz.query.get_or_404(result.quiz_id)
+    
+    if result.user_id != session['user_id']:
+        flash('You do not have permission to view this result', 'error')
+        return redirect(url_for('student_dashboard'))
+    
+    return render_template('quiz_results.html', result=result, quiz=quiz)
 
 @app.route('/classrooms')
 @teacher_required
@@ -410,6 +534,13 @@ def classrooms():
     classrooms = Classroom.query.filter_by(teacher_id=teacher_id).all()
     
     return render_template('classrooms.html', classrooms=classrooms)
+
+@app.route('/reports')
+@teacher_required
+def reports():
+    teacher_id = session['user_id']
+    quizzes = Quiz.query.filter_by(teacher_id=teacher_id).all()
+    return render_template('reports.html', quizzes=quizzes)
 
 @app.route('/create-quiz', methods=['GET', 'POST'])
 @teacher_required
@@ -529,44 +660,100 @@ def ai_generate_quiz():
     
     return render_template('create_quiz.html', ai_generate=True)
 
-@app.route('/assign-quiz/<int:quiz_id>', methods=['GET', 'POST'])
+@app.route('/assign-quiz-to-classroom/<int:classroom_id>')
 @teacher_required
-def assign_quiz(quiz_id):
+def assign_quiz_form(classroom_id):
+    classroom = Classroom.query.get_or_404(classroom_id)
+    if classroom.teacher_id != session['user_id']:
+        flash('You do not have permission to assign quizzes to this classroom', 'error')
+        return redirect(url_for('classrooms'))
+    
+    quizzes = Quiz.query.filter_by(teacher_id=session['user_id']).all()
+    return render_template('select_quiz_to_assign.html', 
+                         classroom=classroom, 
+                         quizzes=quizzes)
+
+# Update the route to make classroom_id optional
+@app.route('/assign-quiz/<int:quiz_id>', methods=['GET', 'POST'])
+@app.route('/assign-quiz/<int:quiz_id>/<int:classroom_id>', methods=['GET', 'POST'])
+@teacher_required
+def assign_quiz(quiz_id, classroom_id=None):
     quiz = Quiz.query.get_or_404(quiz_id)
+    
+    # Verify the quiz belongs to the current teacher
+    if quiz.teacher_id != session['user_id']:
+        flash('You do not have permission to assign this quiz', 'error')
+        return redirect(url_for('quizzes'))
+    
+    # Get all classrooms belonging to the teacher for the dropdown
     classrooms = Classroom.query.filter_by(teacher_id=session['user_id']).all()
     
     form = AssignQuizForm()
     form.classroom_id.choices = [(c.id, c.name) for c in classrooms]
     
-    if form.validate_on_submit():
-        classroom = Classroom.query.get(form.classroom_id.data)
-        
-        if not classroom or classroom.teacher_id != session['user_id']:
-            flash('Invalid classroom', 'error')
-            return redirect(url_for('quizzes'))
-            
-        # Check if already assigned
-        assignment = QuizAssignment.query.filter_by(
-            quiz_id=quiz.id,
-            classroom_id=classroom.id
-        ).first()
-        
-        if assignment:
-            assignment.due_date = form.due_date.data
-            flash('Updated due date for existing assignment', 'info')
-        else:
-            assignment = QuizAssignment(
-                quiz_id=quiz.id,
-                classroom_id=classroom.id,
-                due_date=form.due_date.data
-            )
-            db.session.add(assignment)
-            flash('Quiz assigned successfully!', 'success')
-        
-        db.session.commit()
-        return redirect(url_for('quizzes'))
+    # Pre-select classroom if provided in URL
+    if classroom_id:
+        form.classroom_id.data = classroom_id
     
-    return render_template('assign_quiz.html', quiz=quiz, form=form)
+    if request.method == 'POST':
+        # Get due date from the form
+        due_date_str = request.form.get('due_date')
+        classroom_id = int(request.form.get('classroom_id', 0))
+        
+        # Basic validation
+        if not classroom_id:
+            flash('Please select a classroom', 'error')
+            return render_template('assign_quiz.html', quiz=quiz, form=form, now=datetime.now())
+        
+        if not due_date_str:
+            flash('Please provide a due date', 'error')
+            return render_template('assign_quiz.html', quiz=quiz, form=form, now=datetime.now())
+        
+        try:
+            # Parse the datetime-local value
+            due_date = datetime.strptime(due_date_str, '%Y-%m-%dT%H:%M')
+            
+            classroom = Classroom.query.get(classroom_id)
+            if not classroom or classroom.teacher_id != session['user_id']:
+                flash('Invalid classroom', 'error')
+                return redirect(url_for('quizzes'))
+            
+            # Check if assignment already exists
+            assignment = QuizAssignment.query.filter_by(
+                quiz_id=quiz.id,
+                classroom_id=classroom.id
+            ).first()
+            
+            if assignment:
+                assignment.due_date = due_date
+                flash('Updated due date for existing assignment', 'info')
+            else:
+                assignment = QuizAssignment(
+                    quiz_id=quiz.id,
+                    classroom_id=classroom.id,
+                    due_date=due_date
+                )
+                db.session.add(assignment)
+                
+                # Update the relationship between Quiz and Classroom
+                if classroom not in quiz.classrooms:
+                    quiz.classrooms.append(classroom)
+                
+                flash('Quiz assigned successfully!', 'success')
+            
+            db.session.commit()
+            return redirect(url_for('classrooms'))
+            
+        except ValueError as e:
+            flash(f'Invalid date format. Please use the date picker.', 'error')
+            logger.error(f"Error parsing date: {str(e)}")
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Error assigning quiz: {str(e)}")
+            flash('Error assigning quiz. Please try again.', 'error')
+    
+    # Pass the current datetime to the template for min attribute
+    return render_template('assign_quiz.html', quiz=quiz, form=form, now=datetime.now())
 
 @app.route("/api/generate-quiz-api", methods=["POST"])
 def generate_quiz_api():

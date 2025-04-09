@@ -12,12 +12,10 @@
             <div class="stat-value">{{ available_quizzes|length }}</div>
             <div class="stat-label">Available Quizzes</div>
         </div>
-        
         <div class="stat-card">
             <div class="stat-value">{{ completed_quizzes|length }}</div>
             <div class="stat-label">Completed Quizzes</div>
         </div>
-        
         <div class="stat-card">
             <div class="stat-value">{{ avg_score }}%</div>
             <div class="stat-label">Average Score</div>
@@ -30,61 +28,86 @@
     </div>
     
     <div id="available" class="tab-content active">
-        {% for quiz in available_quizzes %}
-        <div class="quiz-card">
-            <h3>{{ quiz.title }}</h3>
-            <p>{{ quiz.description }}</p>
-            <div class="quiz-meta">
-                <span>Questions: {{ quiz.questions|length }}</span>
-                <span>Due: {{ quiz.due_date.strftime('%Y-%m-%d %H:%M') }}</span>
+        {% if available_quizzes %}
+            {% for quiz in available_quizzes %}
+            <div class="quiz-card">
+                <h3>{{ quiz.title }}</h3>
+                <p>{{ quiz.description }}</p>
+                <div class="quiz-meta">
+                    <span>Questions: {{ quiz.questions|length }}</span>
+                    {% if quiz.due_date %}
+                    <span>Due: {{ quiz.due_date.strftime('%Y-%m-%d %H:%M') }}</span>
+                    {% endif %}
+                </div>
+                <a href="{{ url_for('take_quiz', quiz_id=quiz.id) }}" class="btn btn-primary">Start Quiz</a>
             </div>
-            <a href="{{ url_for('take_quiz', quiz_id=quiz.id) }}" class="btn btn-primary">Start Quiz</a>
-        </div>
+            {% endfor %}
         {% else %}
-        <p class="no-quizzes">No available quizzes.</p>
-        {% endfor %}
+            <p class="no-quizzes">No available quizzes.</p>
+        {% endif %}
     </div>
     
     <div id="completed" class="tab-content">
-        {% for result in completed_quizzes %}
-        <div class="quiz-card">
-            <h3>{{ result.quiz.title }}</h3>
-            <div class="quiz-meta">
-                <span>Score: {{ result.score }}%</span>
-                <span>Completed: {{ result.completed_date.strftime('%Y-%m-%d') }}</span>
+        {% if completed_quizzes %}
+            {% for result in completed_quizzes %}
+            <div class="quiz-card">
+                <h3>{{ result.quiz.title }}</h3>
+                <div class="quiz-meta">
+                    <span>Score: {{ result.score }}%</span>
+                    <span>Completed: {{ result.date_taken.strftime('%Y-%m-%d') }}</span>
+                    {% if result.due_date %}
+                    <span>Due date was: {{ result.due_date.strftime('%Y-%m-%d %H:%M') }}</span>
+                    {% endif %}
+                </div>
+                <a href="{{ url_for('quiz_results', result_id=result.result.id) }}" class="btn btn-secondary">
+                    View Results
+                </a>
             </div>
-            <a href="{{ url_for('quiz_results', result_id=result.id) }}" class="btn btn-secondary">View Results</a>
-        </div>
+            {% endfor %}
         {% else %}
-        <p class="no-quizzes">No completed quizzes.</p>
-        {% endfor %}
+            <p class="no-quizzes">No completed quizzes yet.</p>
+        {% endif %}
     </div>
 </div>
-{% endblock %}
 
-{% block extra_scripts %}
+<style>
+    .quiz-card {
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 15px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .quiz-meta {
+        display: flex;
+        gap: 15px;
+        margin: 10px 0;
+        color: #666;
+    }
+    .tab-content {
+        display: none;
+    }
+    .tab-content.active {
+        display: block;
+    }
+    .no-quizzes {
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 15px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        text-align: center;
+        color: #666;
+    }
+</style>
+
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const tabs = document.querySelector('.tabs');
-        const tabButtons = tabs.querySelectorAll('.tab-btn');
-        const tabContents = document.querySelectorAll('.tab-content');
-
-        tabButtons.forEach(button => {
-            button.addEventListener('click', () => {
-                const targetTab = button.dataset.tab;
-                
-                // Hide all tab contents
-                tabContents.forEach(content => {
-                    content.classList.remove('active');
-                });
-                
-                // Show target tab content
-                document.getElementById(targetTab).classList.add('active');
-                
-                // Update active state of buttons
-                tabButtons.forEach(btn => btn.classList.remove('active'));
-                button.classList.add('active');
-            });
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById(btn.getAttribute('data-tab')).classList.add('active');
         });
     });
 </script>

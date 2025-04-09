@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+
+{% block title %}Class Reports{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <h1 class="dashboard-title">Class Reports</h1>
+    
+    <div class="reports-container">
+        {% for class in classes %}
+        <div class="report-item">
+            <h3>{{ class.name }}</h3>
+            <p>Total Students: {{ class.students|length }}</p>
+            
+            <div class="scores-table">
+                <h4>Student Scores</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Student Name</th>
+                            <th>Score</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for student in class.students %}
+                        <tr>
+                            <td>{{ student.name }}</td>
+                            <td>{{ student.score }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                
+                <div class="class-averages">
+                    <p><strong>Class Average:</strong> {{ class.average_score }}</p>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <p>No classes available.</p>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

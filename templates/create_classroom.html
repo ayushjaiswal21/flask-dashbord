@@ -6,7 +6,7 @@
 <div class="dashboard-container">
     <h1 class="dashboard-title">Create New Classroom</h1>
     
-    <form method="POST">
+    <form method="POST" action="{{ url_for('create_classroom') }}">
         <div class="form-group">
             <label for="name">Classroom Name</label>
             <input type="text" id="name" name="name" required>

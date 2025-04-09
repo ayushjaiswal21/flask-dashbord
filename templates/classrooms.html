@@ -11,21 +11,19 @@
             <li><a href="{{ url_for('teacher_dashboard') }}">Overview</a></li>
             <li><a href="{{ url_for('quizzes') }}">Quizzes</a></li>
             <li class="active"><a href="{{ url_for('classrooms') }}">Classrooms</a></li>
-            <li><a href="#">Reports</a></li>
+            <li><a href="{{ url_for('reports') }}">Reports</a></li>
             <li><a href="{{ url_for('ai_generate_quiz') }}">Generate Quiz</a></li>
         </ul>
     </nav>
     
     <div class="dashboard-content">
         <div class="dashboard-actions">
-            <!-- Replaced with placeholder link since create_classroom route doesn't exist -->
-            <a href="#" class="btn btn-primary">Create New Classroom</a>
+            <a href="{{ url_for('create_classroom') }}" class="btn btn-primary">Create New Classroom</a>
         </div>
         
         {% for classroom in classrooms %}
         <div class="classroom-card">
             <h2>{{ classroom.name }}</h2>
-            <!-- Fixed: Using count() method for SQLAlchemy relationships instead of |length -->
             <p>
                 {% if classroom.students is defined %}
                     {% if classroom.students.count() is defined %}
@@ -90,10 +88,8 @@
             </div>
             
             <div class="classroom-actions">
-                <!-- Replaced with placeholder link since manage_students route doesn't exist -->
-                <a href="#" class="btn btn-secondary">Manage Students</a>
-                <!-- Replaced with placeholder link since assign_quiz_form route doesn't exist -->
-                <a href="#" class="btn btn-primary">Assign Quiz</a>
+                <a href="{{ url_for('assign_quiz_form', classroom_id=classroom.id) }}" class="btn btn-primary">Assign Quiz</a>
+                <a href="{{ url_for('classroom_details', classroom_id=classroom.id) }}" class="btn btn-primary">View Details</a>
             </div>
         </div>
         {% else %}

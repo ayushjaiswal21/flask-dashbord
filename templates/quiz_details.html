@@ -6,15 +6,7 @@
 <div class="dashboard-container">
     <h1 class="dashboard-title">Quiz Details</h1>
     
-    <nav class="dashboard-nav">
-        <ul>
-            <li><a href="{{ url_for('teacher_dashboard') }}">Overview</a></li>
-            <li><a href="{{ url_for('quizzes') }}">Quizzes</a></li>
-            <li><a href="{{ url_for('classrooms') }}">Classrooms</a></li>
-        </ul>
-    </nav>
-    
-    <div class="quiz-details">
+    <form method="POST" action="{{ url_for('quiz_details', quiz_id=quiz.id) }}">
         <h2>{{ quiz.title }}</h2>
         <p class="quiz-description">{{ quiz.description }}</p>
         
@@ -23,47 +15,30 @@
             <div class="question-card">
                 <div class="form-group">
                     <label>Question {{ loop.index }}</label>
-                    <textarea readonly>{{ question.text }}</textarea>
+                    <textarea name="question_{{ question.id }}">{{ question.text }}</textarea>
                 </div>
                 
                 <div class="options-group">
                     {% for option in question.options.split(',') %}
                     <div class="form-group">
                         <label>Option {{ loop.index|upper }}</label>
-                        <input type="text" value="{{ option }}" readonly>
+                        <input type="text" name="option_{{ question.id }}_{{ loop.index }}" value="{{ option }}">
                     </div>
                     {% endfor %}
                 </div>
                 
                 <div class="form-group">
                     <label>Correct Answer</label>
-                    <input type="text" value="{{ question.correct_answer }}" readonly>
+                    <input type="text" name="correct_{{ question.id }}" value="{{ question.correct_answer }}">
                 </div>
             </div>
             {% endfor %}
         </div>
         
         <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
             <a href="{{ url_for('quizzes') }}" class="btn btn-secondary">Back to Quizzes</a>
         </div>
-    </div>
-    
-    {% if quiz.assignments %}
-    <div class="quiz-assignments">
-        <h3>Assigned to Classes</h3>
-        <ul class="assignment-list">
-            {% for assignment in quiz.assignments %}
-            <li>
-                {{ assignment.classroom.name }} - Due: {{ assignment.due_date.strftime('%Y-%m-%d %H:%M') }}
-            </li>
-            {% endfor %}
-        </ul>
-    </div>
-    {% else %}
-    <div class="quiz-assignments">
-        <h3>Not yet assigned to any classes</h3>
-        <a href="{{ url_for('assign_quiz', quiz_id=quiz.id) }}" class="btn btn-primary">Assign to Class</a>
-    </div>
-    {% endif %}
+    </form>
 </div>
 {% endblock %}

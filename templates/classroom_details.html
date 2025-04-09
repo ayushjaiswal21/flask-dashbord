@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+
+{% block title %}Classroom: {{ classroom.name }}{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <h1 class="dashboard-title">{{ classroom.name }}</h1>
+    
+    <nav class="dashboard-nav">
+        <ul>
+            <li><a href="{{ url_for('teacher_dashboard') }}">Overview</a></li>
+            <li><a href="{{ url_for('quizzes') }}">Quizzes</a></li>
+            <li><a href="{{ url_for('classrooms') }}">Classrooms</a></li>
+        </ul>
+    </nav>
+    
+    <div class="classroom-details">
+        <h2>Assigned Quizzes</h2>
+        
+        {% if assigned_quizzes %}
+            <div class="assigned-quizzes">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Quiz</th>
+                            <th>Description</th>
+                            <th>Due Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in assigned_quizzes %}
+                            <tr>
+                                <td>{{ item.quiz.title }}</td>
+                                <td>{{ item.quiz.description }}</td>
+                                <td>{{ item.due_date.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td>
+                                    <a href="{{ url_for('quiz_details', quiz_id=item.quiz.id) }}" class="btn btn-sm btn-primary">View Quiz</a>
+                                    <a href="{{ url_for('assign_quiz', quiz_id=item.quiz.id, classroom_id=classroom.id) }}" class="btn btn-sm btn-secondary">Edit Assignment</a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p>No quizzes have been assigned to this classroom yet.</p>
+        {% endif %}
+        
+        <div class="classroom-actions">
+            <h3>Assign a Quiz</h3>
+            <a href="{{ url_for('assign_quiz_form', classroom_id=classroom.id) }}" class="btn btn-primary">Assign New Quiz</a>
+        </div>
+    </div>
+</div>
+
+<style>
+    .classroom-details {
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        margin-top: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .assigned-quizzes {
+        margin: 20px 0;
+    }
+    .table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .table th, .table td {
+        padding: 10px;
+        border-bottom: 1px solid #ddd;
+        text-align: left;
+    }
+    .table th {
+        background-color: #f5f5f5;
+    }
+    .classroom-actions {
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 1px solid #eee;
+    }
+</style>
+{% endblock %}

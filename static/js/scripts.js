@@ -209,6 +209,10 @@ function clearError() {
     errorContainer.innerHTML = '';
 }
 
+function viewResult(resultId) {
+    window.location.href = `/quiz-results/${resultId}`;
+}
+
 // Security and UI helpers
 function escapeHTML(str) {
     return str.toString()
